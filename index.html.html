@@ -1,0 +1,1668 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AIエージェントは、いま、ここで動いている ― 事務長への可視化資料</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Shippori+Mincho:wght@400;500;700;800&family=Bebas+Neue&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0e14;
+    --bg-elev: #11161f;
+    --bg-card: #161c28;
+    --ink: #e8e4d8;
+    --ink-dim: #8a8676;
+    --ink-faint: #4a4a3e;
+    --green: #5dd39e;
+    --green-bright: #7ef0b8;
+    --amber: #ffb947;
+    --red: #ff5a5a;
+    --red-deep: #c1272d;
+    --blue: #5fb5e8;
+    --gold: #d4af37;
+    --washi: #f2ecd9;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    height: 100%;
+    overflow: hidden;
+  }
+
+  body {
+    font-family: 'JetBrains Mono', monospace;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.6;
+    position: relative;
+  }
+
+  /* スキャンライン */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent 0,
+      transparent 2px,
+      rgba(255, 255, 255, 0.015) 2px,
+      rgba(255, 255, 255, 0.015) 3px
+    );
+    pointer-events: none;
+    z-index: 100;
+  }
+
+  /* グリッド */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(93, 211, 158, 0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(93, 211, 158, 0.04) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ─── スライドコンテナ ─── */
+  .deck {
+    position: fixed;
+    inset: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 2;
+  }
+
+  .slide {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    padding: 56px 64px 64px;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(40px);
+    transition:
+      opacity 0.6s cubic-bezier(0.25, 0.1, 0.25, 1),
+      transform 0.7s cubic-bezier(0.25, 0.1, 0.25, 1),
+      visibility 0s linear 0.7s;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .slide.active {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+    transition:
+      opacity 0.6s cubic-bezier(0.25, 0.1, 0.25, 1),
+      transform 0.7s cubic-bezier(0.25, 0.1, 0.25, 1);
+  }
+
+  .slide.prev {
+    transform: translateY(-40px);
+  }
+
+  /* ─── トップバー ─── */
+  .topbar {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    height: 36px;
+    background: rgba(10, 14, 20, 0.92);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid rgba(93, 211, 158, 0.2);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 20px;
+    font-size: 11px;
+    z-index: 50;
+    color: var(--ink-dim);
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .topbar .left { display: flex; gap: 24px; align-items: center; }
+  .topbar .dot {
+    width: 8px; height: 8px;
+    background: var(--green);
+    border-radius: 50%;
+    box-shadow: 0 0 10px var(--green);
+    animation: pulse 1.2s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+  .topbar .right { color: var(--green); display: flex; gap: 20px; align-items: center; }
+
+  /* ─── スライド番号インジケータ ─── */
+  .progress {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    height: 32px;
+    background: rgba(10, 14, 20, 0.92);
+    backdrop-filter: blur(10px);
+    border-top: 1px solid rgba(93, 211, 158, 0.2);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 20px;
+    z-index: 50;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--ink-dim);
+    letter-spacing: 0.1em;
+  }
+
+  .progress-dots {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .progress-dot {
+    width: 8px;
+    height: 8px;
+    border: 1px solid var(--ink-faint);
+    background: transparent;
+    transition: all 0.3s;
+    cursor: pointer;
+  }
+
+  .progress-dot.active {
+    background: var(--green);
+    border-color: var(--green);
+    box-shadow: 0 0 8px var(--green);
+    transform: scale(1.2);
+  }
+
+  .progress-dot.visited {
+    background: var(--ink-faint);
+    border-color: var(--ink-faint);
+  }
+
+  .progress-counter {
+    color: var(--green);
+  }
+
+  .progress-counter .total {
+    color: var(--ink-faint);
+  }
+
+  .progress-hint {
+    color: var(--ink-faint);
+    font-size: 10px;
+    letter-spacing: 0.15em;
+  }
+
+  /* ─── スライド共通要素 ─── */
+  .container {
+    max-width: 1200px;
+    margin: 0 auto;
+    width: 100%;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+
+  .section-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(93, 211, 158, 0.1);
+    border: 1px solid var(--green);
+    color: var(--green);
+    padding: 6px 16px;
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    margin-bottom: 24px;
+    font-family: 'JetBrains Mono', monospace;
+    align-self: flex-start;
+  }
+
+  .section-tag::before {
+    content: '';
+    width: 6px; height: 6px;
+    background: var(--green);
+    border-radius: 50%;
+  }
+
+  .section-h {
+    font-family: 'Shippori Mincho', serif;
+    font-size: clamp(28px, 4vw, 44px);
+    color: var(--washi);
+    line-height: 1.25;
+    margin-bottom: 20px;
+    font-weight: 700;
+  }
+
+  .section-h .accent { color: var(--amber); }
+
+  .section-sub {
+    color: var(--ink-dim);
+    max-width: 800px;
+    font-size: 14px;
+    line-height: 1.85;
+    margin-bottom: 32px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  /* ─── HERO (Slide 1) ─── */
+  .hero-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+
+  .hero-eyebrow {
+    font-size: 12px;
+    color: var(--green);
+    letter-spacing: 0.3em;
+    margin-bottom: 24px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .hero-eyebrow::before {
+    content: '▌';
+    animation: blink 1s step-end infinite;
+  }
+  @keyframes blink {
+    50% { opacity: 0; }
+  }
+
+  .hero h1 {
+    font-family: 'Shippori Mincho', serif;
+    font-size: clamp(36px, 5.5vw, 72px);
+    line-height: 1.1;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    margin-bottom: 24px;
+    color: var(--washi);
+  }
+
+  .hero h1 .glitch {
+    color: var(--green);
+    position: relative;
+    display: inline-block;
+  }
+
+  .hero h1 .glitch::after {
+    content: attr(data-text);
+    position: absolute;
+    left: 2px; top: 0;
+    color: var(--red);
+    opacity: 0.7;
+    mix-blend-mode: screen;
+    clip-path: polygon(0 0, 100% 0, 100% 33%, 0 33%);
+    animation: glitch-shift 4s infinite;
+  }
+  @keyframes glitch-shift {
+    0%, 95%, 100% { transform: translate(0); }
+    96% { transform: translate(-3px, 1px); }
+    97% { transform: translate(2px, -1px); }
+    98% { transform: translate(-1px, 2px); }
+  }
+
+  .hero-sub {
+    font-size: 14.5px;
+    color: var(--ink-dim);
+    max-width: 640px;
+    line-height: 1.85;
+    border-left: 2px solid var(--green);
+    padding-left: 20px;
+    margin-bottom: 32px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .live-clock {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 32px;
+    align-items: center;
+    padding: 28px 32px;
+    background: var(--bg-elev);
+    border: 1px solid rgba(93, 211, 158, 0.2);
+    position: relative;
+    max-width: 880px;
+  }
+
+  .live-clock::before {
+    content: 'LIVE';
+    position: absolute;
+    top: -10px; left: 20px;
+    background: var(--bg);
+    color: var(--red);
+    padding: 0 10px;
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    border: 1px solid var(--red);
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .clock-display {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 40px;
+    font-weight: 700;
+    color: var(--green-bright);
+    letter-spacing: 0.05em;
+    text-shadow: 0 0 20px rgba(93, 211, 158, 0.4);
+  }
+
+  .clock-label {
+    font-size: 10.5px;
+    color: var(--ink-dim);
+    letter-spacing: 0.2em;
+    margin-bottom: 6px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .clock-side {
+    border-left: 1px dashed var(--ink-faint);
+    padding-left: 32px;
+  }
+
+  .clock-side .big {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 56px;
+    line-height: 1;
+    color: var(--amber);
+    letter-spacing: 0.02em;
+  }
+
+  .clock-side .desc {
+    font-size: 12px;
+    color: var(--ink);
+    margin-top: 6px;
+    line-height: 1.55;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  /* ─── ターミナル (Slide 2) ─── */
+  .terminal {
+    background: #050608;
+    border: 1px solid var(--green);
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow:
+      0 0 0 1px rgba(93, 211, 158, 0.2),
+      0 20px 60px rgba(0, 0, 0, 0.6),
+      0 0 80px rgba(93, 211, 158, 0.08);
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    max-height: calc(100vh - 320px);
+  }
+
+  .terminal-header {
+    background: #0d1117;
+    padding: 8px 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid rgba(93, 211, 158, 0.15);
+    flex-shrink: 0;
+  }
+
+  .terminal-dots {
+    display: flex;
+    gap: 8px;
+  }
+
+  .terminal-dots span {
+    width: 11px; height: 11px;
+    border-radius: 50%;
+  }
+
+  .terminal-dots span:nth-child(1) { background: #ff5f56; }
+  .terminal-dots span:nth-child(2) { background: #ffbd2e; }
+  .terminal-dots span:nth-child(3) { background: #27c93f; }
+
+  .terminal-title {
+    font-size: 11px;
+    color: var(--ink-dim);
+    letter-spacing: 0.1em;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .terminal-body {
+    padding: 20px 24px;
+    font-size: 12.5px;
+    line-height: 1.8;
+    color: var(--ink);
+    overflow-y: auto;
+    flex: 1;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .term-line {
+    margin-bottom: 4px;
+    opacity: 0;
+    animation: typein 0.4s ease-out forwards;
+  }
+
+  @keyframes typein {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .term-system { color: var(--ink-dim); }
+  .term-user { color: var(--amber); }
+  .term-think { color: var(--blue); font-style: italic; }
+  .term-action { color: var(--green); }
+  .term-success { color: var(--green-bright); font-weight: 500; }
+  .term-warn { color: var(--amber); }
+  .term-error { color: var(--red); }
+
+  .term-cursor {
+    display: inline-block;
+    width: 9px; height: 14px;
+    background: var(--green-bright);
+    animation: blink 1s step-end infinite;
+    vertical-align: middle;
+    margin-left: 4px;
+  }
+
+  .sim-meta {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1px;
+    background: rgba(93, 211, 158, 0.15);
+    margin-top: 16px;
+    flex-shrink: 0;
+  }
+
+  .sim-meta div {
+    background: var(--bg-elev);
+    padding: 12px 16px;
+  }
+
+  .sim-meta .label {
+    font-size: 9.5px;
+    color: var(--ink-dim);
+    letter-spacing: 0.2em;
+    margin-bottom: 4px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .sim-meta .val {
+    font-size: 16px;
+    color: var(--green-bright);
+    font-weight: 500;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .replay-btn {
+    background: transparent;
+    border: 1px solid var(--green);
+    color: var(--green);
+    padding: 6px 16px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.15em;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .replay-btn:hover {
+    background: var(--green);
+    color: var(--bg);
+  }
+
+  /* ─── カウンター (Slide 3) ─── */
+  .counter-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    flex: 1;
+    align-content: center;
+  }
+
+  .counter-card {
+    background: var(--bg-elev);
+    border: 1px solid var(--ink-faint);
+    padding: 24px 22px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .counter-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0;
+    width: 4px; height: 100%;
+    background: var(--amber);
+  }
+
+  .counter-card.danger::before { background: var(--red); }
+  .counter-card.danger .num { color: var(--red); }
+  .counter-card.warn .num { color: var(--amber); }
+
+  .counter-card .org {
+    font-size: 11px;
+    color: var(--ink-dim);
+    letter-spacing: 0.15em;
+    margin-bottom: 12px;
+    text-transform: uppercase;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .counter-card .num {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 52px;
+    line-height: 1;
+    letter-spacing: 0.02em;
+    margin-bottom: 8px;
+  }
+
+  .counter-card .num .unit {
+    font-size: 0.4em;
+    color: var(--ink);
+    margin-left: 6px;
+  }
+
+  .counter-card .desc {
+    font-size: 12.5px;
+    color: var(--ink);
+    line-height: 1.65;
+    font-family: 'Shippori Mincho', serif;
+  }
+
+  .counter-card .source {
+    font-size: 9.5px;
+    color: var(--ink-faint);
+    margin-top: 10px;
+    letter-spacing: 0.1em;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  /* ─── タイムライン (Slide 4) ─── */
+  .timeline-wrap {
+    background: var(--bg-elev);
+    border: 1px solid var(--ink-faint);
+    padding: 36px 40px;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    max-height: 480px;
+  }
+
+  .timeline-labels {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    margin-bottom: 24px;
+    font-size: 11px;
+    color: var(--ink-dim);
+    letter-spacing: 0.15em;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .timeline-labels span {
+    text-align: center;
+  }
+
+  .timeline-labels span.now {
+    color: var(--green);
+    font-weight: 700;
+  }
+
+  .timeline-track {
+    position: relative;
+    height: 120px;
+    border-bottom: 1px solid var(--ink-faint);
+    background:
+      repeating-linear-gradient(90deg, transparent 0, transparent calc(20% - 1px), var(--ink-faint) calc(20% - 1px), var(--ink-faint) 20%);
+  }
+
+  .timeline-bar {
+    position: absolute;
+    top: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .bar-original {
+    background: rgba(255, 185, 71, 0.15);
+    border: 1px solid var(--amber);
+    color: var(--amber);
+    left: 80%; width: 18%;
+  }
+
+  .bar-revised {
+    top: 64px;
+    background: rgba(255, 90, 90, 0.2);
+    border: 1px solid var(--red);
+    color: var(--red);
+    left: 20%; width: 40%;
+    animation: barpulse 2s ease-in-out infinite;
+  }
+
+  @keyframes barpulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(255, 90, 90, 0.4); }
+    50% { box-shadow: 0 0 0 8px rgba(255, 90, 90, 0); }
+  }
+
+  .timeline-now {
+    position: absolute;
+    top: -20px;
+    bottom: -20px;
+    width: 2px;
+    background: var(--green);
+    left: 20%;
+    box-shadow: 0 0 20px var(--green);
+  }
+
+  .timeline-now::after {
+    content: 'NOW ─ 2026.05';
+    position: absolute;
+    top: -28px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: var(--green);
+    font-size: 11px;
+    letter-spacing: 0.15em;
+    white-space: nowrap;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .timeline-legend {
+    margin-top: 24px;
+    display: flex;
+    gap: 32px;
+    font-size: 12px;
+    flex-wrap: wrap;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .timeline-legend span {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .timeline-legend .swatch {
+    width: 14px; height: 14px;
+    display: inline-block;
+  }
+
+  .swatch.amb { background: rgba(255, 185, 71, 0.3); border: 1px solid var(--amber); }
+  .swatch.rd { background: rgba(255, 90, 90, 0.3); border: 1px solid var(--red); }
+
+  .timeline-warn {
+    margin-top: 24px;
+    padding: 18px 24px;
+    background: rgba(255, 90, 90, 0.06);
+    border-left: 3px solid var(--red);
+    font-family: 'Shippori Mincho', serif;
+    font-size: 13.5px;
+    line-height: 1.75;
+    color: var(--ink);
+  }
+
+  /* ─── Before/After (Slide 5) ─── */
+  .split {
+    display: grid;
+    grid-template-columns: 1fr 50px 1fr;
+    gap: 0;
+    border: 1px solid var(--ink-faint);
+    flex: 1;
+    align-self: stretch;
+    max-height: 520px;
+  }
+
+  .split-col {
+    padding: 28px 32px;
+    background: var(--bg-elev);
+    overflow-y: auto;
+  }
+
+  .split-col.before {
+    background: rgba(255, 90, 90, 0.04);
+  }
+
+  .split-col.after {
+    background: rgba(93, 211, 158, 0.04);
+  }
+
+  .split-arrow {
+    background: var(--bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--green);
+    font-size: 28px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .split-arrow::before {
+    content: '→';
+    animation: arrowmove 1.8s ease-in-out infinite;
+  }
+
+  @keyframes arrowmove {
+    0%, 100% { transform: translateX(-6px); opacity: 0.6; }
+    50% { transform: translateX(6px); opacity: 1; }
+  }
+
+  .split-label {
+    font-size: 10.5px;
+    letter-spacing: 0.2em;
+    margin-bottom: 10px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .split-col.before .split-label { color: var(--red); }
+  .split-col.after .split-label { color: var(--green); }
+
+  .split-title {
+    font-family: 'Shippori Mincho', serif;
+    font-size: 19px;
+    color: var(--washi);
+    margin-bottom: 18px;
+    line-height: 1.45;
+  }
+
+  .split-list {
+    list-style: none;
+  }
+
+  .split-list li {
+    padding: 8px 0;
+    padding-left: 22px;
+    position: relative;
+    font-size: 13px;
+    line-height: 1.65;
+    color: var(--ink);
+    border-bottom: 1px dashed var(--ink-faint);
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .split-list li:last-child { border-bottom: none; }
+
+  .split-list li::before {
+    position: absolute;
+    left: 0; top: 8px;
+  }
+
+  .split-col.before .split-list li::before {
+    content: '×';
+    color: var(--red);
+  }
+
+  .split-col.after .split-list li::before {
+    content: '✓';
+    color: var(--green);
+  }
+
+  /* ─── デスク (Slide 6) ─── */
+  .desk {
+    padding: 36px 36px 20px;
+    background:
+      radial-gradient(ellipse at center, rgba(212, 175, 55, 0.06) 0%, transparent 70%),
+      var(--bg-elev);
+    border: 1px solid var(--ink-faint);
+    position: relative;
+    flex: 1;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    max-height: 520px;
+  }
+
+  .desk-label {
+    color: var(--gold);
+    font-size: 10.5px;
+    letter-spacing: 0.25em;
+    font-family: 'JetBrains Mono', monospace;
+    margin-bottom: 12px;
+  }
+
+  .papers {
+    position: relative;
+    flex: 1;
+    min-height: 320px;
+  }
+
+  .paper {
+    position: absolute;
+    width: 200px;
+    background: var(--washi);
+    color: #2a2620;
+    padding: 16px 18px;
+    font-family: 'Shippori Mincho', serif;
+    box-shadow:
+      0 4px 12px rgba(0, 0, 0, 0.5),
+      0 12px 32px rgba(0, 0, 0, 0.3);
+    transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    cursor: default;
+  }
+
+  .paper:hover {
+    transform: translateY(-8px) rotate(0deg) scale(1.05) !important;
+    z-index: 10 !important;
+  }
+
+  .paper .stamp {
+    position: absolute;
+    top: 8px; right: 8px;
+    width: 32px; height: 32px;
+    border: 2px solid var(--red-deep);
+    color: var(--red-deep);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 8.5px;
+    font-weight: 700;
+    transform: rotate(15deg);
+    font-family: 'Shippori Mincho', serif;
+    letter-spacing: -0.05em;
+  }
+
+  .paper .kind {
+    font-size: 9.5px;
+    color: #888073;
+    letter-spacing: 0.15em;
+    margin-bottom: 6px;
+    text-transform: uppercase;
+  }
+
+  .paper .ttl {
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1.45;
+    margin-bottom: 8px;
+  }
+
+  .paper .meta {
+    font-size: 10px;
+    color: #6a6258;
+    border-top: 1px solid #d4cdba;
+    padding-top: 6px;
+    line-height: 1.45;
+  }
+
+  .paper:nth-child(1) { top: 4%; left: 4%; transform: rotate(-6deg); }
+  .paper:nth-child(2) { top: 18%; left: 22%; transform: rotate(3deg); }
+  .paper:nth-child(3) { top: 0%; left: 42%; transform: rotate(-4deg); }
+  .paper:nth-child(4) { top: 20%; left: 64%; transform: rotate(5deg); }
+  .paper:nth-child(5) { top: 50%; left: 10%; transform: rotate(7deg); }
+  .paper:nth-child(6) { top: 55%; left: 36%; transform: rotate(-3deg); }
+  .paper:nth-child(7) { top: 48%; left: 60%; transform: rotate(2deg); }
+
+  .desk-caption {
+    text-align: center;
+    font-family: 'Shippori Mincho', serif;
+    font-size: 14px;
+    color: var(--washi);
+    line-height: 1.7;
+    padding-top: 14px;
+    border-top: 1px dashed var(--ink-faint);
+    margin-top: 12px;
+  }
+
+  .desk-caption .em {
+    color: var(--gold);
+    font-weight: 700;
+  }
+
+  /* ─── Closing (Slide 7) ─── */
+  .closing-content {
+    text-align: center;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    max-width: 880px;
+    margin: 0 auto;
+  }
+
+  .closing-content h2 {
+    font-family: 'Shippori Mincho', serif;
+    font-size: clamp(24px, 3.5vw, 38px);
+    color: var(--washi);
+    line-height: 1.45;
+    margin-bottom: 32px;
+    font-weight: 700;
+  }
+
+  .closing-content h2 .red { color: var(--red); }
+  .closing-content h2 .green { color: var(--green); }
+
+  .closing-content p {
+    color: var(--ink-dim);
+    font-family: 'Shippori Mincho', serif;
+    font-size: 14.5px;
+    line-height: 1.95;
+    max-width: 680px;
+    margin: 0 auto 14px;
+  }
+
+  .sig {
+    margin-top: 36px;
+    padding: 24px 28px;
+    border: 1px solid var(--gold);
+    color: var(--gold);
+    font-family: 'Shippori Mincho', serif;
+    font-size: 14.5px;
+    line-height: 1.85;
+    background: rgba(212, 175, 55, 0.04);
+    text-align: left;
+  }
+
+  .sig::before {
+    content: '— REMEMBER';
+    display: block;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.3em;
+    margin-bottom: 12px;
+    color: var(--gold);
+    opacity: 0.7;
+  }
+
+  /* ─── スライド送信ヒント ─── */
+  .nav-hint {
+    position: fixed;
+    bottom: 48px;
+    right: 24px;
+    z-index: 60;
+    background: rgba(10, 14, 20, 0.85);
+    border: 1px solid var(--ink-faint);
+    padding: 10px 14px;
+    font-size: 10px;
+    color: var(--ink-dim);
+    letter-spacing: 0.15em;
+    font-family: 'JetBrains Mono', monospace;
+    opacity: 0;
+    animation: fadeIn 0.6s 1s forwards, fadeOut 0.6s 5s forwards;
+    pointer-events: none;
+  }
+
+  @keyframes fadeIn { to { opacity: 1; } }
+  @keyframes fadeOut { to { opacity: 0; } }
+
+  .nav-hint .key {
+    display: inline-block;
+    border: 1px solid var(--green);
+    color: var(--green);
+    padding: 1px 6px;
+    margin: 0 2px;
+    border-radius: 3px;
+    font-size: 9px;
+  }
+
+  /* ─── レスポンシブ ─── */
+  @media (max-width: 1024px) {
+    .slide { padding: 56px 40px 56px; }
+    .counter-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+
+  @media (max-width: 768px) {
+    .slide { padding: 48px 22px 56px; }
+    .live-clock { grid-template-columns: 1fr; gap: 18px; padding: 22px 24px; }
+    .clock-display { font-size: 28px; }
+    .clock-side { border-left: none; border-top: 1px dashed var(--ink-faint); padding-left: 0; padding-top: 18px; }
+    .clock-side .big { font-size: 40px; }
+    .counter-grid { grid-template-columns: 1fr; gap: 12px; max-height: calc(100vh - 280px); overflow-y: auto; }
+    .counter-card { padding: 18px 18px; }
+    .counter-card .num { font-size: 40px; }
+    .split { grid-template-columns: 1fr; }
+    .split-arrow { display: none; }
+    .papers { min-height: 480px; }
+    .paper { width: 80%; left: 10% !important; position: relative !important; margin-bottom: 12px; }
+    .paper:nth-child(n) { top: 0; left: 10%; transform: rotate(0deg); }
+    .sim-meta { grid-template-columns: repeat(2, 1fr); }
+    .topbar { font-size: 10px; padding: 0 12px; }
+    .topbar .left { gap: 10px; }
+    .nav-hint { display: none; }
+    .terminal { max-height: calc(100vh - 380px); }
+  }
+</style>
+</head>
+<body>
+
+<!-- ═══ トップバー ═══ -->
+<div class="topbar">
+  <div class="left">
+    <span class="dot"></span>
+    <span>SYSTEM: ACTIVE</span>
+    <span>SESSION ID: <span id="sid">—</span></span>
+  </div>
+  <div class="right">
+    <span id="topclock">--:--:--</span>
+  </div>
+</div>
+
+<!-- ═══ プログレスバー ═══ -->
+<div class="progress">
+  <div class="progress-dots" id="dots"></div>
+  <div class="progress-counter"><span id="cur">01</span> / <span class="total" id="tot">07</span></div>
+  <div class="progress-hint">▌ SCROLL ／ ↑ ↓ ／ SPACE</div>
+</div>
+
+<!-- ═══ ナビヒント ═══ -->
+<div class="nav-hint">
+  <span class="key">▼</span> マウスホイールで次へ
+</div>
+
+<!-- ═══ スライドデッキ ═══ -->
+<div class="deck" id="deck">
+
+<!-- ═══════════ SLIDE 1 / HERO ═══════════ -->
+<section class="slide active" data-slide="1">
+  <div class="container">
+    <div class="hero-content">
+      <div class="hero-eyebrow">VISUALIZATION FOR HIGH SCHOOL ADMINISTRATIVE DIRECTORS</div>
+
+      <h1>
+        AIエージェントは、<br>
+        いま、<span class="glitch" data-text="この瞬間に">この瞬間に</span>、動いている。
+      </h1>
+
+      <div class="hero-sub">
+        これは「概念」の話ではありません。<br>
+        あなたがこのページを開いている数十秒の間にも、世界のどこかで、自律的に判断し、コードを書き、メールを送り、契約書を草案するAIが、休まずに稼働しています。<br>
+        まずは「いま、何が起きているか」を、目で見てください。
+      </div>
+
+      <div class="live-clock">
+        <div>
+          <div class="clock-label">▌LIVE COUNTER</div>
+          <div class="clock-display" id="bigclock">--:--:--</div>
+          <div class="clock-label" style="margin-top:10px;color:var(--ink-faint)">JST / 2026 — このセッション開始から</div>
+        </div>
+        <div class="clock-side">
+          <div class="clock-label">▌このページを開いてから、世界で削減された推定労働時間</div>
+          <div class="big" id="savedhours">0</div>
+          <div class="desc">時間（推定）<br><span style="color:var(--ink-dim);font-size:10.5px">— 日本の上位500社のAI導入平均から推計</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ═══════════ SLIDE 2 / TERMINAL ═══════════ -->
+<section class="slide" data-slide="2">
+  <div class="container">
+    <div class="section-tag">§ 01 ─ LIVE DEMONSTRATION</div>
+    <h1 class="section-h">AIエージェントの<span class="accent">仕事ぶり</span>を、まず見てください。</h1>
+    <p class="section-sub">
+      AIエージェントが実際に行っている処理を、わかりやすく再現したシミュレーションです。<br>
+      「指示を受ける → 自分で計画する → 実行する → 自己検証する → 修正する」——人間が数日かけていた業務を、AIが数十秒で完結させていく様子をご覧ください。
+    </p>
+
+    <div class="terminal">
+      <div class="terminal-header">
+        <div class="terminal-dots"><span></span><span></span><span></span></div>
+        <div class="terminal-title">claude-code  ─  agent.session.live</div>
+        <div style="font-size:10px;color:var(--green)">● RECORDING</div>
+      </div>
+      <div class="terminal-body" id="term"></div>
+    </div>
+
+    <div class="sim-meta">
+      <div>
+        <div class="label">▌経過時間</div>
+        <div class="val" id="elapsed">0.0 秒</div>
+      </div>
+      <div>
+        <div class="label">▌人間がやれば</div>
+        <div class="val">約 2〜3 日</div>
+      </div>
+      <div>
+        <div class="label">▌自己修正回数</div>
+        <div class="val" id="fixes">0 回</div>
+      </div>
+      <div>
+        <div class="label">▌使用ツール</div>
+        <div class="val" id="tools">0 種</div>
+      </div>
+    </div>
+
+    <div style="margin-top:14px;display:flex;justify-content:flex-end">
+      <button class="replay-btn" onclick="runDemo()">▶ もう一度再生</button>
+    </div>
+  </div>
+</section>
+
+
+<!-- ═══════════ SLIDE 3 / COUNTERS ═══════════ -->
+<section class="slide" data-slide="3">
+  <div class="container">
+    <div class="section-tag">§ 02 ─ ALREADY HAPPENING</div>
+    <h1 class="section-h">これは、未来の話<span class="accent">ではありません</span>。</h1>
+    <p class="section-sub">
+      以下は、2025年〜2026年5月までに、日本の大企業が実際に公表したAI導入の効果です。<br>
+      「2040年に向けて準備する」のではなく、「今この瞬間、企業はもう動いている」という事実を、まず数字で確認してください。
+    </p>
+
+    <div class="counter-grid">
+      <div class="counter-card danger">
+        <div class="org">三菱UFJ銀行</div>
+        <div class="num" data-target="220000" data-suffix="">0<span class="unit">時間/月</span></div>
+        <div class="desc">ChatGPTを全行員に展開したことによる、月間の労働削減効果（試算）。</div>
+        <div class="source">[ 2025年導入実績 ]</div>
+      </div>
+
+      <div class="counter-card danger">
+        <div class="org">東京海上日動</div>
+        <div class="num" data-target="90000" data-suffix="">0<span class="unit">時間/年</span></div>
+        <div class="desc">AIエージェント活用により、年間で削減を目指す業務時間。</div>
+        <div class="source">[ 2026年実行計画 ]</div>
+      </div>
+
+      <div class="counter-card danger">
+        <div class="org">Cloudflare（米）</div>
+        <div class="num" data-target="1100" data-suffix="">0<span class="unit">人</span></div>
+        <div class="desc">業績は<strong style="color:var(--green-bright)">好調</strong>のまま、「AIによる組織再編」を理由に削減した人員数。</div>
+        <div class="source">[ 2026年5月発表 ]</div>
+      </div>
+
+      <div class="counter-card warn">
+        <div class="org">GPT-5.5 / Codex</div>
+        <div class="num" data-target="82.7" data-suffix="%" data-decimal="1">0<span class="unit"></span></div>
+        <div class="desc">Terminal-Bench 2.0における正答率。複雑な環境構築・システム実装をほぼミスなく完了する水準。</div>
+        <div class="source">[ 2026年ベンチマーク ]</div>
+      </div>
+
+      <div class="counter-card warn">
+        <div class="org">Google AI Studio</div>
+        <div class="num" data-target="2000000" data-suffix="">0<span class="unit">トークン</span></div>
+        <div class="desc">Gemini 3.1の最大コンテキスト長。数千ページのドキュメントを一度に読み込み、本質的課題を特定する。</div>
+        <div class="source">[ 2026年5月時点 ]</div>
+      </div>
+
+      <div class="counter-card warn">
+        <div class="org">スキル変化率</div>
+        <div class="num" data-target="66" data-suffix="%">0<span class="unit"></span></div>
+        <div class="desc">AIの影響を受ける職種で求められるスキルの変化率（前年は25%）。<strong style="color:var(--amber)">1年で約2.6倍</strong>に加速。</div>
+        <div class="source">[ 富士通レポート 2026.03 ]</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ═══════════ SLIDE 4 / TIMELINE ═══════════ -->
+<section class="slide" data-slide="4">
+  <div class="container">
+    <div class="section-tag">§ 03 ─ THE FRONT-LOADING</div>
+    <h1 class="section-h">2040年に来るはずだった変化は、<br><span class="accent">10年前倒し</span>される。</h1>
+    <p class="section-sub">
+      経済産業省の推計が想定した「事務職440万人余剰」は、2040年に向けた緩やかなプロセスとして描かれていました。<br>
+      しかし2026年現在のAIエージェントの実装速度は、その想定を「数倍のスピード」で追い越しています。<br>
+      専門家は、この変化が<strong style="color:var(--red)">2030年代前半に集中的に発生</strong>すると指摘しています。
+    </p>
+
+    <div class="timeline-wrap">
+      <div class="timeline-labels">
+        <span>2020</span>
+        <span class="now">2026 ← いま</span>
+        <span>2030</span>
+        <span>2035</span>
+        <span>2040</span>
+      </div>
+      <div class="timeline-track">
+        <div class="timeline-now"></div>
+        <div class="timeline-bar bar-original">▌当初の想定</div>
+        <div class="timeline-bar bar-revised">▌実際の進行・前倒し</div>
+      </div>
+      <div class="timeline-legend">
+        <span><span class="swatch amb"></span>経産省推計の当初想定</span>
+        <span><span class="swatch rd"></span>2026年時点で観察される実際の進行</span>
+      </div>
+
+      <div class="timeline-warn">
+        <strong style="color:var(--red);letter-spacing:0.05em">⚠ 何が問題か</strong><br>
+        高校教育改革の制度設計には数年、その成果が労働市場に現れるまでさらに4〜6年。<br>
+        一方、AIエージェントは「今この瞬間」も事務職を代替しつつある。<br>
+        <strong style="color:var(--washi)">この速度の非対称性こそが、最大の構造問題です。</strong>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ═══════════ SLIDE 5 / BEFORE-AFTER ═══════════ -->
+<section class="slide" data-slide="5">
+  <div class="container">
+    <div class="section-tag">§ 04 ─ DEFINITION SHIFT</div>
+    <h1 class="section-h">「働く」の定義が、<span class="accent">書き換わる</span>。</h1>
+    <p class="section-sub">
+      AIエージェントの登場で、ホワイトカラーの仕事は構造ごと変わります。<br>
+      新しく価値が高まる職種「AIオーケストレーター」——AIに何をやらせるかを設計する、ビジネスと技術と倫理を横断する人材——が出現しています。
+    </p>
+
+    <div class="split">
+      <div class="split-col before">
+        <div class="split-label">▌ BEFORE / これまで</div>
+        <div class="split-title">人間が「実行者」だった時代</div>
+        <ul class="split-list">
+          <li>コードを「書ける」ことが価値だった</li>
+          <li>情報を「集められる」ことが価値だった</li>
+          <li>文書を「作成できる」ことが価値だった</li>
+          <li>定型業務を「正確にこなす」ことが価値だった</li>
+          <li>「ベテランの勘」が最終判断だった</li>
+          <li>事務職は「安定した職」だった</li>
+        </ul>
+      </div>
+
+      <div class="split-arrow"></div>
+
+      <div class="split-col after">
+        <div class="split-label">▌ AFTER / これから</div>
+        <div class="split-title">人間が「指揮者」になる時代</div>
+        <ul class="split-list">
+          <li>AIに「何を作らせるか」を定義できる</li>
+          <li>AIが集めた情報を「評価・判断」できる</li>
+          <li>AIの出力に「ダメ出し」できる目を持つ</li>
+          <li>定型業務を「AIに移譲する設計」ができる</li>
+          <li>データと倫理に基づく最終判断ができる</li>
+          <li>事務職は「再定義される職」になる</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ═══════════ SLIDE 6 / DESK ═══════════ -->
+<section class="slide" data-slide="6">
+  <div class="container">
+    <div class="section-tag">§ 05 ─ YOUR DESK, NOW</div>
+    <h1 class="section-h">これらは、<span class="accent">あなたの机</span>に届きます。</h1>
+    <p class="section-sub">
+      AIエージェントの社会実装は、抽象的な国家戦略ではありません。<br>
+      具体的な書類、契約書、稟議書として、あなたの机に届くものです。<strong style="color:var(--washi)">それを最初に判断するのは、ほかでもないあなたです。</strong>
+    </p>
+
+    <div class="desk">
+      <div class="desk-label">▌ 事務長の机 ─ 2026 年度想定</div>
+
+      <div class="papers">
+        <div class="paper">
+          <div class="stamp">至急</div>
+          <div class="kind">基金管理</div>
+          <div class="ttl">高校教育改革促進基金 区分経理</div>
+          <div class="meta">補助率 10/10<br>全額国費・監査対象</div>
+        </div>
+
+        <div class="paper">
+          <div class="stamp">機密</div>
+          <div class="kind">契約 / 知財</div>
+          <div class="ttl">企業寄附講座 共同開発契約</div>
+          <div class="meta">知的財産権の帰属<br>要リーガルチェック</div>
+        </div>
+
+        <div class="paper">
+          <div class="stamp">重要</div>
+          <div class="kind">調達 / DX</div>
+          <div class="ttl">生成AI業務委託 仕様書</div>
+          <div class="meta">データ学習利用禁止条項<br>セキュリティ要件</div>
+        </div>
+
+        <div class="paper">
+          <div class="stamp">期限</div>
+          <div class="kind">労務</div>
+          <div class="ttl">外部人材委嘱契約</div>
+          <div class="meta">偽装請負リスク確認<br>社会保険適否</div>
+        </div>
+
+        <div class="paper">
+          <div class="stamp">確認</div>
+          <div class="kind">設備投資</div>
+          <div class="ttl">遠隔授業設備 入札仕様</div>
+          <div class="meta">5年陳腐化リスク<br>事業継続要件</div>
+        </div>
+
+        <div class="paper">
+          <div class="stamp">至急</div>
+          <div class="kind">連携</div>
+          <div class="ttl">産学官コンソーシアム 規約案</div>
+          <div class="meta">合意形成プロセス<br>事務局運営</div>
+        </div>
+
+        <div class="paper">
+          <div class="stamp">秘</div>
+          <div class="kind">人材戦略</div>
+          <div class="ttl">校務DX計画 概算要望</div>
+          <div class="meta">エビデンス必須<br>来年度予算反映</div>
+        </div>
+      </div>
+
+      <div class="desk-caption">
+        これらの書類は、すでに <span class="em">毎日</span>、日本のどこかの高校事務室で実際に開かれています。
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ═══════════ SLIDE 7 / CLOSING ═══════════ -->
+<section class="slide" data-slide="7">
+  <div class="container">
+    <div class="closing-content">
+      <h2>
+        <span class="red">▌</span> 見えてきましたか。<br>
+        あなたが向き合っているのは、<br>
+        遠い将来の<span class="red">「予測」</span>ではなく、<br>
+        今この瞬間の<span class="green">「現実」</span>です。
+      </h2>
+
+      <p>
+        AIエージェントが自律的に仕事をこなす映像を、いま、見ていただきました。<br>
+        その能力を実装した企業が、毎月22万時間を削減している事実を、数字で確認しました。<br>
+        2040年に来るはずだった変化が、10年前倒しで起きていることを、時間軸で確認しました。<br>
+        そして、その変化に対応する具体的な書類が、あなたの机に届くことを確認しました。
+      </p>
+
+      <div class="sig">
+        AIエージェントは、24時間、休まずに、自律的に判断し続ける労働力である。<br>
+        その労働力の社会実装を、最前線で受け止める書類は、<br>
+        校長でも教育委員会でもなく、まず<strong style="color:var(--washi)">事務長の机に届く</strong>。<br><br>
+        変化の最前線は、すでに、私の手元にある。<br>
+        だから、私が、最初に学ばなければならない。
+      </div>
+    </div>
+  </div>
+</section>
+
+</div>
+
+<script>
+  // ─── トップバー時計 ───
+  function updateClock() {
+    const now = new Date();
+    const h = String(now.getHours()).padStart(2, '0');
+    const m = String(now.getMinutes()).padStart(2, '0');
+    const s = String(now.getSeconds()).padStart(2, '0');
+    document.getElementById('topclock').textContent = `${h}:${m}:${s} JST`;
+    const bc = document.getElementById('bigclock');
+    if (bc) bc.textContent = `${h}:${m}:${s}`;
+  }
+  updateClock();
+  setInterval(updateClock, 1000);
+
+  // ─── セッションID ───
+  document.getElementById('sid').textContent = 'AGT-' + Math.random().toString(36).slice(2, 8).toUpperCase();
+
+  // ─── 削減時間カウンター ───
+  const startTime = Date.now();
+  function updateSaved() {
+    const elapsed = (Date.now() - startTime) / 1000;
+    const saved = Math.floor(elapsed * 38.6);
+    const el = document.getElementById('savedhours');
+    if (el) el.textContent = saved.toLocaleString();
+  }
+  updateSaved();
+  setInterval(updateSaved, 100);
+
+  // ─── スライド・ナビゲーション ───
+  const slides = document.querySelectorAll('.slide');
+  const totalSlides = slides.length;
+  let currentSlide = 0;
+  let isTransitioning = false;
+  const transitionLockMs = 700;
+  const visitedSlides = new Set([0]);
+
+  // プログレスドット生成
+  const dotsContainer = document.getElementById('dots');
+  for (let i = 0; i < totalSlides; i++) {
+    const dot = document.createElement('div');
+    dot.className = 'progress-dot' + (i === 0 ? ' active' : '');
+    dot.dataset.idx = i;
+    dot.addEventListener('click', () => goToSlide(i));
+    dotsContainer.appendChild(dot);
+  }
+  document.getElementById('tot').textContent = String(totalSlides).padStart(2, '0');
+
+  function updateUI() {
+    document.getElementById('cur').textContent = String(currentSlide + 1).padStart(2, '0');
+    document.querySelectorAll('.progress-dot').forEach((d, i) => {
+      d.classList.remove('active', 'visited');
+      if (i === currentSlide) {
+        d.classList.add('active');
+      } else if (visitedSlides.has(i)) {
+        d.classList.add('visited');
+      }
+    });
+  }
+
+  function goToSlide(target) {
+    if (isTransitioning || target === currentSlide || target < 0 || target >= totalSlides) return;
+    isTransitioning = true;
+
+    const prevIdx = currentSlide;
+    const goingForward = target > currentSlide;
+
+    slides[prevIdx].classList.remove('active');
+    slides[prevIdx].classList.add(goingForward ? 'prev' : '');
+
+    currentSlide = target;
+    visitedSlides.add(target);
+    slides[currentSlide].classList.remove('prev');
+    slides[currentSlide].classList.add('active');
+
+    updateUI();
+
+    // スライドごとのトリガー
+    onSlideEnter(currentSlide);
+
+    setTimeout(() => {
+      isTransitioning = false;
+      // 古いスライドの "prev" クラスをクリア
+      slides.forEach((s, i) => {
+        if (i !== currentSlide) s.classList.remove('prev');
+      });
+    }, transitionLockMs);
+  }
+
+  function nextSlide() { goToSlide(currentSlide + 1); }
+  function prevSlide() { goToSlide(currentSlide - 1); }
+
+  // ─── スライドごとのトリガー ───
+  let countersTriggered = false;
+  function onSlideEnter(idx) {
+    // Slide 2 (index 1) - ターミナル
+    if (idx === 1 && !termHasRun) {
+      runDemo();
+    }
+    // Slide 3 (index 2) - カウンター
+    if (idx === 2 && !countersTriggered) {
+      animateCounters();
+      countersTriggered = true;
+    }
+  }
+
+  // ─── ホイール / キー / タッチ操作 ───
+  // ホイールはデバウンスで「1回 = 1スライド」
+  let wheelLocked = false;
+  window.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    if (wheelLocked || isTransitioning) return;
+    wheelLocked = true;
+
+    if (e.deltaY > 0) {
+      nextSlide();
+    } else if (e.deltaY < 0) {
+      prevSlide();
+    }
+
+    setTimeout(() => { wheelLocked = false; }, transitionLockMs + 50);
+  }, { passive: false });
+
+  window.addEventListener('keydown', (e) => {
+    if (isTransitioning) return;
+    switch (e.key) {
+      case 'ArrowDown':
+      case 'PageDown':
+      case ' ':
+        e.preventDefault();
+        nextSlide();
+        break;
+      case 'ArrowUp':
+      case 'PageUp':
+        e.preventDefault();
+        prevSlide();
+        break;
+      case 'Home':
+        e.preventDefault();
+        goToSlide(0);
+        break;
+      case 'End':
+        e.preventDefault();
+        goToSlide(totalSlides - 1);
+        break;
+    }
+  });
+
+  // タッチ操作（モバイル）
+  let touchStartY = null;
+  window.addEventListener('touchstart', (e) => {
+    touchStartY = e.touches[0].clientY;
+  });
+  window.addEventListener('touchend', (e) => {
+    if (touchStartY === null) return;
+    const touchEndY = e.changedTouches[0].clientY;
+    const diff = touchStartY - touchEndY;
+    if (Math.abs(diff) > 50) {
+      if (diff > 0) nextSlide();
+      else prevSlide();
+    }
+    touchStartY = null;
+  });
+
+  // ─── ターミナル・シミュレーション ───
+  const term = document.getElementById('term');
+  let termHasRun = false;
+
+  const script = [
+    { c: 'system', text: '$ claude-code --agent --autonomous' },
+    { c: 'system', text: 'Session started · Model: Claude 4.7 Opus · Context: 1,000,000 tokens', delay: 300 },
+    { c: 'system', text: '─────────────────────────────────────────', delay: 200 },
+    { c: 'user', text: '> 来月の県立高校事務長会議の議事録要約と、出席者全員への日程調整メール、参考資料の収集をまとめて頼む。', delay: 600 },
+    { c: 'think', text: '◇ 思考中 ... タスクを5つの工程に分解しました', delay: 900 },
+    { c: 'action', text: '▸ ステップ 1/5: 過去の議事録3件を読み込み中 (drive.search_files)', delay: 700 },
+    { c: 'success', text: '  ✓ 議事録 8月版・10月版・12月版を取得（合計42ページ）', delay: 800, fix: 1 },
+    { c: 'action', text: '▸ ステップ 2/5: 要約を生成中（重要事項を抽出）', delay: 700 },
+    { c: 'success', text: '  ✓ 主要議題6件、決定事項12件、次回への申送り3件を構造化', delay: 800 },
+    { c: 'action', text: '▸ ステップ 3/5: 出席者カレンダーを横断確認 (calendar.find_slots)', delay: 700 },
+    { c: 'warn', text: '  ⚠ 委員A氏のカレンダーが非公開 → メールで個別照会する代替案を生成', delay: 900, fix: 1 },
+    { c: 'success', text: '  ✓ 19名中16名が空いている時間枠を3候補抽出', delay: 700 },
+    { c: 'action', text: '▸ ステップ 4/5: 招待メールを起草（敬語レベルを過去送信履歴から推定）', delay: 800 },
+    { c: 'success', text: '  ✓ メール本文を3案生成・各案に件名と添付資料リストを付与', delay: 700 },
+    { c: 'action', text: '▸ ステップ 5/5: 参考資料の収集 (web_search → 文科省/経産省最新公表)', delay: 800 },
+    { c: 'think', text: '◇ 自己検証 ... 生成内容を再度チェック中', delay: 700 },
+    { c: 'warn', text: '  ⚠ 引用元の1件が古い版だった → 最新の改訂版に差し替え（自己修正）', delay: 900, fix: 1 },
+    { c: 'success', text: '  ✓ 7件の参考資料を取得・要約済PDFとして整理', delay: 700 },
+    { c: 'system', text: '─────────────────────────────────────────', delay: 300 },
+    { c: 'success', text: '▌ 完了 ─ 5タスク、3回の自己修正、合計使用ツール: 4種', delay: 400 },
+    { c: 'success', text: '▌ 経過時間: 47.3 秒 ／ 人間想定: 2〜3 日', delay: 300 },
+    { c: 'system', text: 'session.complete · awaiting next instruction', delay: 200 },
+  ];
+
+  let simStart = 0;
+  let running = false;
+
+  async function runDemo() {
+    if (running) return;
+    running = true;
+    termHasRun = true;
+    term.innerHTML = '';
+    let fixCount = 0;
+    let toolCount = 0;
+    simStart = Date.now();
+    document.getElementById('fixes').textContent = '0 回';
+    document.getElementById('tools').textContent = '0 種';
+    document.getElementById('elapsed').textContent = '0.0 秒';
+
+    const elapsedInterval = setInterval(() => {
+      const e = ((Date.now() - simStart) / 1000).toFixed(1);
+      document.getElementById('elapsed').textContent = e + ' 秒';
+    }, 100);
+
+    for (let i = 0; i < script.length; i++) {
+      const item = script[i];
+      await new Promise(r => setTimeout(r, item.delay || 500));
+      const line = document.createElement('div');
+      line.className = 'term-line';
+
+      let cls = 'term-system';
+      if (item.c === 'user') cls = 'term-user';
+      else if (item.c === 'think') cls = 'term-think';
+      else if (item.c === 'action') { cls = 'term-action'; toolCount++; }
+      else if (item.c === 'success') cls = 'term-success';
+      else if (item.c === 'warn') cls = 'term-warn';
+      else if (item.c === 'error') cls = 'term-error';
+
+      line.innerHTML = `<span class="${cls}">${item.text}</span>`;
+      term.appendChild(line);
+
+      if (item.fix) fixCount += item.fix;
+      document.getElementById('fixes').textContent = fixCount + ' 回';
+      document.getElementById('tools').textContent = Math.min(toolCount, 4) + ' 種';
+
+      term.scrollTop = term.scrollHeight;
+    }
+
+    clearInterval(elapsedInterval);
+    document.getElementById('elapsed').textContent = '47.3 秒';
+
+    const cursor = document.createElement('span');
+    cursor.className = 'term-cursor';
+    term.appendChild(cursor);
+
+    running = false;
+  }
+
+  // ─── カウンター・アニメーション ───
+  function animateCounters() {
+    const counters = document.querySelectorAll('.counter-card .num');
+    counters.forEach(el => {
+      const target = parseFloat(el.dataset.target);
+      const suffix = el.dataset.suffix || '';
+      const decimal = parseInt(el.dataset.decimal) || 0;
+      const unitHTML = el.querySelector('.unit') ? el.querySelector('.unit').outerHTML : '';
+      const duration = 1800;
+      const start = Date.now();
+
+      function tick() {
+        const elapsed = Date.now() - start;
+        const progress = Math.min(elapsed / duration, 1);
+        const eased = 1 - Math.pow(1 - progress, 3);
+        const value = target * eased;
+        let display;
+        if (decimal > 0) {
+          display = value.toFixed(decimal);
+        } else {
+          display = Math.floor(value).toLocaleString();
+        }
+        el.innerHTML = display + suffix + unitHTML;
+        if (progress < 1) requestAnimationFrame(tick);
+      }
+      tick();
+    });
+  }
+</script>
+
+</body>
+</html>
